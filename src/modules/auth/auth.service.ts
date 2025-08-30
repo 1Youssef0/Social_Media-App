@@ -1,23 +1,143 @@
 import type { Request, Response } from "express";
-import { ISignupBodyInputsDtoType } from "./auth.dto";
-import { userModel } from "../../DB/models/user.model";
-import { BadRequestException } from "../../utils/response/error.response";
-
+import {
+  IConfirmEmailInputsDtoType,
+  IForgotCodeBodyInputsDtoType,
+  IGmail,
+  ILoginBodyInputsDtoType,
+  IResetForgotCodeBodyInputsDtoType,
+  ISignupBodyInputsDtoType,
+  IVerifyForgotCodeBodyInputsDtoType,
+} from "./auth.dto";
+import { providerEnum, UserModel } from "../../DB/models/user.model";
+import { UserRepository } from "../../DB/repository/user.repository";
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from "../../utils/response/error.response";
+import { compareHash, generateHash } from "../../utils/security/hash.security";
+import { emailEvent } from "../../utils/events/email.events";
+import { generateNumberOtp } from "../../utils/otp";
+import { createLoginCredentials } from "../../utils/security/token.security";
+import { OAuth2Client, type TokenPayload } from "google-auth-library";
 
 class authenticationService {
-    constructor() {}
-    
-    signup = async (req: Request, res: Response ): Promise <Response>  => {
-        let {userName , email , password}:ISignupBodyInputsDtoType = req.body
-        console.log({userName , email , password});
+  private userModel = new UserRepository(UserModel);
+  constructor() {}
 
-        const checkUserExists = await userModel.findOne({email})
-        if (checkUserExists) {
-            throw new BadRequestException("Email Exists")
-        }
-        const user = await userModel.create(req.body)
-        return res.status(201).json({ message: "signed-up successfully", data: user });
-        
+  private async verifyGmailAccount(idToken: string): Promise<TokenPayload> {
+    const client = new OAuth2Client();
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.WEB_CLIENT_IDS?.split(",") || [],
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.email_verified) {
+      throw new BadRequestException("failed to verify this google account");
+    }
+    return payload;
+  }
+
+  loginWithGmail = async (req: Request, res: Response): Promise<Response> => {
+    const { idToken }: IGmail = req.body;
+    const { email } = await this.verifyGmailAccount(idToken);
+    const user = await this.userModel.findOne({
+      filter: {
+        email,
+        provider: providerEnum.GOOGLE,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(
+        "not registered account or registered with another account"
+      );
+    }
+
+    const credentials = await createLoginCredentials(user);
+
+    return res.status(201).json({ message: "Done", data: { credentials } });
+  };
+
+  signupWithGmail = async (req: Request, res: Response): Promise<Response> => {
+    const { idToken }: IGmail = req.body;
+    const { email, family_name, given_name, picture } =
+      await this.verifyGmailAccount(idToken);
+    const user = await this.userModel.findOne({
+      filter: {
+        email,
+      },
+    });
+
+    if (user) {
+      if (user.provider === providerEnum.GOOGLE) {
+        return await this.loginWithGmail(req, res);
+      }
+      throw new ConflictException("Email exist with another provider");
+    }
+
+    const [newUser] =
+      (await this.userModel.create({
+        data: [
+          {
+            email: email as string,
+            firstName: given_name as string,
+            lastName: family_name as string,
+            profileImage: picture as string,
+            confirmedAt: new Date(),
+            provider: providerEnum.GOOGLE,
+          },
+        ],
+      })) || [];
+
+    if (!newUser) {
+      throw new BadRequestException(
+        "Fail to signup with gmail , please Try again later 😢"
+      );
+    }
+
+    const credentials = await createLoginCredentials(newUser);
+
+    return res.status(201).json({ message: "Done", data: { credentials } });
+  };
+
+  signup = async (req: Request, res: Response): Promise<Response> => {
+    let { firstName, lastName, email, password }: ISignupBodyInputsDtoType =
+      req.body;
+
+    //check user exists ?
+    const checkUserExists = await this.userModel.findOne({
+      filter: { email },
+      select: "email",
+      options: {
+        lean: false,
+      },
+    });
+    if (checkUserExists) {
+      throw new ConflictException("Email Already Exists");
+    }
+    const otp = generateNumberOtp();
+    console.log(otp);
+
+    //create a new user
+    const user = await this.userModel.createUser({
+      data: [
+        {
+          firstName,
+          lastName,
+          email,
+          password: await generateHash(password),
+          confirmEmailOtp: await generateHash(String(otp)),
+        },
+      ],
+      // options:{validateBeforeSave:true}
+    });
+
+    emailEvent.emit("confirmEmail", { to: email, html: String(otp) });
+
+    return res
+      .status(201)
+      .json({ message: "signed-up successfully", data: { user } });
 
     // try {
     //     validators.signup.body.parse(req.body)
@@ -26,7 +146,6 @@ class authenticationService {
     //         issues:JSON.parse(error as string)
     //     })
     // }
-
 
     // try {
     //   await  validators.signup.body.parseAsync(req.body)
@@ -47,14 +166,167 @@ class authenticationService {
     //                 throw new BadRequestException("validation_error" ,{
     //             issues:JSON.parse(validationResult.error as unknown as string)
     //         })
-    // }   
+    // }
+  };
 
+  confirmEmail = async (req: Request, res: Response): Promise<Response> => {
+    const { email, otp }: IConfirmEmailInputsDtoType = req.body;
 
-  }
+    const user = await this.userModel.findOne({
+      filter: {
+        email,
+        confirmEmailOtp: { $exists: true },
+        confirmedAt: { $exists: false },
+      },
+    });
 
-    login = (req: Request, res: Response): Response => {  
-    return res.status(201).json({ message: "logged successfully", data: req.body });
-  }
+    if (!user) {
+      throw new NotFoundException("Invalid Account ");
+    }
+
+    if (!(await compareHash(otp, user.confirmEmailOtp as string))) {
+      throw new ConflictException("InValid confirmation code");
+    }
+
+    await this.userModel.updateOne({
+      filter: { email },
+      update: {
+        confirmedAt: new Date(),
+        $unset: { confirmEmailOtp: true },
+      },
+    });
+
+    return res.status(201).json({ message: "confirmed successfully" });
+  };
+
+  login = async (req: Request, res: Response): Promise<Response> => {
+    const { email, password }: ILoginBodyInputsDtoType = req.body;
+
+    const user = await this.userModel.findOne({
+      filter: { email, provider: providerEnum.SYSTEM },
+    });
+    if (!user) {
+      throw new NotFoundException("In-Valid Login data");
+    }
+    if (!user.confirmedAt) {
+      throw new BadRequestException("verify your account first , please😊");
+    }
+    if (!(await compareHash(password, user.password))) {
+      throw new NotFoundException("In-Valid Login data");
+    }
+
+    const credentials = await createLoginCredentials(user);
+
+    return res.status(201).json({
+      message: "logged successfully",
+      data: { credentials },
+    });
+  };
+
+  sendForgotCode = async (req: Request, res: Response): Promise<Response> => {
+    const { email }: IForgotCodeBodyInputsDtoType = req.body;
+
+    const user = await this.userModel.findOne({
+      filter: {
+        email,
+        provider: providerEnum.SYSTEM,
+        confirmedAt: { $exists: true },
+      },
+    });
+    if (!user) {
+      throw new NotFoundException("In-Valid account");
+    }
+
+    const otp = generateNumberOtp();
+    const result = await this.userModel.updateOne({
+      filter: { email },
+      update: {
+        resetPasswordOtp: await generateHash(String(otp)),
+      },
+    });
+
+    if (!result.matchedCount) {
+      throw new BadRequestException(
+        "failed to send the reset code ,please try again later😢"
+      );
+    }
+
+    emailEvent.emit("resetPassword", { to: email, html: String(otp) });
+
+    return res.status(201).json({
+      message: "reset code sent successfully",
+      data: {},
+    });
+  };
+
+  verifySendForgotCode = async (
+    req: Request,
+    res: Response
+  ): Promise<Response> => {
+    const { email, otp }: IVerifyForgotCodeBodyInputsDtoType = req.body;
+
+    const user = await this.userModel.findOne({
+      filter: {
+        email,
+        provider: providerEnum.SYSTEM,
+        resetPasswordOtp: { $exists: true },
+      },
+    });
+    if (!user) {
+      throw new NotFoundException("In-Valid account");
+    }
+
+    if (!(await compareHash(otp, user.resetPasswordOtp as string))) {
+      throw new ConflictException("In-Valid otp");
+    }
+
+    return res.status(201).json({
+      message: "verified successfully",
+      data: {},
+    });
+  };
+  resetForgotPassword = async (
+    req: Request,
+    res: Response
+  ): Promise<Response> => {
+    const { email, otp, password }: IResetForgotCodeBodyInputsDtoType =
+      req.body;
+
+    const user = await this.userModel.findOne({
+      filter: {
+        email,
+        provider: providerEnum.SYSTEM,
+        resetPasswordOtp: { $exists: true },
+      },
+    });
+    if (!user) {
+      throw new NotFoundException("In-Valid account");
+    }
+
+    if (!(await compareHash(otp, user.resetPasswordOtp as string))) {
+      throw new ConflictException("In-Valid otp");
+    }
+
+    const result = await this.userModel.updateOne({
+      filter: { email },
+      update: {
+        password: await generateHash(password),
+        changeCredentialsTime: new Date(),
+        $unset: { resetPasswordOtp: true },
+      },
+    });
+
+    if (!result.matchedCount) {
+      throw new BadRequestException(
+        "failed to reset password ,please try again later😢"
+      );
+    }
+
+    return res.status(201).json({
+      message: "verified successfully",
+      data: {},
+    });
+  };
 }
 
 export default new authenticationService();

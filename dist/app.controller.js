@@ -11,6 +11,7 @@ const express_rate_limit_1 = require("express-rate-limit");
 const dotenv_1 = require("dotenv");
 (0, dotenv_1.config)({ path: (0, node_path_1.resolve)("./config/.env.development") });
 const auth_controller_1 = __importDefault(require("./modules/auth/auth.controller"));
+const user_controller_1 = __importDefault(require("./modules/user/user.controller"));
 const error_response_1 = require("./utils/response/error.response");
 const db_connection_1 = __importDefault(require("./DB/db.connection"));
 const limiter = (0, express_rate_limit_1.rateLimit)({
@@ -31,6 +32,7 @@ const bootstrap = async () => {
         res.json({ message: "welcome to social app backend landing page 💖✔" });
     });
     app.use("/auth", auth_controller_1.default);
+    app.use("/user", user_controller_1.default);
     app.use("{/*dummy}", (req, res) => {
         return res.status(404).json({ message: "InValid Routing ,Please check your Url and the method 😢" });
     });

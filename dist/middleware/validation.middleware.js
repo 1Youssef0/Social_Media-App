@@ -29,8 +29,10 @@ const validation = (schema) => {
 };
 exports.validation = validation;
 exports.generalFields = {
-    userName: zod_1.z.string().min(2).max(20),
+    firstName: zod_1.z.string().min(2).max(20),
+    lastName: zod_1.z.string().min(2).max(20),
     email: zod_1.z.email(),
+    otp: zod_1.z.string().regex(/^\d{6}$/),
     password: zod_1.z.string().regex(/^(?=.*\d)(?=.*[a-z])(?=.*[A-z])(?=.*[a-zA-Z]).{8,}$/),
     confirmPassword: zod_1.z.string()
 };

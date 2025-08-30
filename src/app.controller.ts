@@ -15,6 +15,7 @@ config({ path: resolve("./config/.env.development") });
 
 //module routing
 import authController from "./modules/auth/auth.controller";
+import userController from "./modules/user/user.controller";
 import { globalErrorHandling } from "./utils/response/error.response";
 import connectDB from "./DB/db.connection";
 
@@ -48,6 +49,7 @@ const bootstrap = async (): Promise<void>=> {
 
   //Sub-app-routing-modules
   app.use("/auth", authController);
+  app.use("/user", userController);
 
   //In-Valid routing
   app.use("{/*dummy}", (req, res) => {

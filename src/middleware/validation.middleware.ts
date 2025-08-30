@@ -45,8 +45,11 @@ export const validation = (schema: schemaType) => {
 
 
 export const generalFields = {
-            userName: z.string().min(2).max(20),
+            firstName: z.string().min(2).max(20),
+            lastName: z.string().min(2).max(20),
+            // userName: z.string().min(2).max(20),
             email: z.email(),
+            otp: z.string().regex(/^\d{6}$/),
             password: z.string().regex(/^(?=.*\d)(?=.*[a-z])(?=.*[A-z])(?=.*[a-zA-Z]).{8,}$/),
             confirmPassword: z.string()
 }

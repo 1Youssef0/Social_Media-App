@@ -38,6 +38,37 @@ export class NotFoundException extends ApplicationError  {
 }
 
 
+export class UnAuthorizedException extends ApplicationError  {
+  constructor(
+    message: string,
+    cause?:unknown
+  ) {
+    super(message, 401, {cause});
+  }
+}
+
+
+
+export class ForbiddenException extends ApplicationError  {
+  constructor(
+    message: string,
+    cause?:unknown
+  ) {
+    super(message, 403, {cause});
+  }
+}
+
+
+export class ConflictException extends ApplicationError  {
+  constructor(
+    message: string,
+    cause?:unknown
+  ) {
+    super(message, 409, {cause});
+  }
+}
+
+
 export const globalErrorHandling = (
   error: IError,
   req: Request,
