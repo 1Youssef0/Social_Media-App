@@ -1,4 +1,5 @@
 import {
+  DeleteResult,
   FlattenMaps,
   HydratedDocument,
   MongooseUpdateQueryOptions,
@@ -6,6 +7,7 @@ import {
   ProjectionType,
   QueryOptions,
   RootFilterQuery,
+  Types,
   UpdateQuery,
   UpdateWriteOpResult,
 } from "mongoose";
@@ -56,6 +58,31 @@ export class DatabaseRepository<TDocument> {
   }): Promise<UpdateWriteOpResult> {
     return await this.model.updateOne(
       filter,
+      { ...update, $inc: { __v: 1 } },
+      options
+    );
+  }
+
+
+  async deleteOne({
+    filter,
+  }: {
+    filter: RootFilterQuery<TDocument>;
+  }): Promise<DeleteResult> {
+    return await this.model.deleteOne(filter);
+  }
+
+  async findByIdAndUpdate({
+    id,
+    update,
+    options = { new: true },
+  }: {
+    id: Types.ObjectId;
+    update?: UpdateQuery<TDocument>;
+    options?: QueryOptions<TDocument> | null;
+  }): Promise<HydratedDocument<TDocument> | lean<TDocument> | null> {
+    return await this.model.findByIdAndUpdate(
+      id,
       { ...update, $inc: { __v: 1 } },
       options
     );

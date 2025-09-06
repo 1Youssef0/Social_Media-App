@@ -16,8 +16,15 @@ config({ path: resolve("./config/.env.development") });
 //module routing
 import authController from "./modules/auth/auth.controller";
 import userController from "./modules/user/user.controller";
-import { globalErrorHandling } from "./utils/response/error.response";
+import {
+  BadRequestException,
+  globalErrorHandling,
+} from "./utils/response/error.response";
 import connectDB from "./DB/db.connection";
+import { createGetPreSignedLink, deleteFile, getFile } from "./utils/multer/s3.config";
+import { promisify } from "node:util";
+import { pipeline } from "node:stream";
+const createS3WriteStreamPipe = promisify(pipeline);
 
 //Handle base rate limit on all api requests
 const limiter = rateLimit({
@@ -27,7 +34,7 @@ const limiter = rateLimit({
   statusCode: 429,
 });
 
-const bootstrap = async (): Promise<void>=> {
+const bootstrap = async (): Promise<void> => {
   //App-start-point
   const app: Express = express();
   const port: number | string = process.env.PORT || 5000;
@@ -39,8 +46,7 @@ const bootstrap = async (): Promise<void>=> {
   app.use(limiter);
 
   //Connecting to DB
-    await connectDB()
-
+  await connectDB();
 
   // App_Routing
   app.get("/", (req: Request, res: Response) => {
@@ -51,9 +57,81 @@ const bootstrap = async (): Promise<void>=> {
   app.use("/auth", authController);
   app.use("/user", userController);
 
+  app.get(
+    "/upload/*path",
+    async (req: Request, res: Response): Promise<void> => {
+      const { downloadName, download = "false" } = req.query as {
+        downloadName?: string;
+        download?: string;
+      };
+      const { path } = req.params as unknown as { path: string[] };
+      const Key = path.join("/");
+      const s3Response = await getFile({ Key });
+      if (!s3Response.Body) {
+        throw new BadRequestException("failed to fetch this asset");
+      }
+
+      res.setHeader(
+        "content-type",
+        `${s3Response.ContentType || "application/octet-stream"}`
+      );
+
+      if (download === "true") {
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${downloadName || Key.split("/").pop()}"`
+        );
+      }
+
+      return await createS3WriteStreamPipe(
+        s3Response.Body as NodeJS.ReadableStream,
+        res
+      );
+    }
+  );
+
+  app.get(
+    "/upload/pre-signed/*path",
+    async (req: Request, res: Response): Promise<Response> => {
+      const {
+        downloadName,
+        download = "false",
+        expiresIn = 120,
+      } = req.query as {
+        downloadName?: string;
+        download?: string;
+        expiresIn?: number;
+      };
+      const { path } = req.params as unknown as { path: string[] };
+      const Key = path.join("/");
+      const url = await createGetPreSignedLink({
+        Key,
+        downloadName: downloadName as string,
+        download,
+        expiresIn
+      });
+      return res.json({ message: "done", data: { url } });
+    }
+  );
+
+  app.get("/test-delete",async (req:Request , res:Response)=>{
+    const {Key} = req.query as {Key:string}
+    const result = await deleteFile({Key})
+    
+    // const result = await deleteFiles({
+    //   urls:[
+    //     "",
+    //     ""
+    //   ]
+    // })
+    return res.json({message:"Done" , data:{ result }})
+  })
+
   //In-Valid routing
   app.use("{/*dummy}", (req, res) => {
-    return res.status(404).json({message: "InValid Routing ,Please check your Url and the method 😢"});
+    return res.status(404).json({
+      message: "InValid Routing ,Please check your Url and the method 😢",
+    });
   });
 
   //Global error handling
