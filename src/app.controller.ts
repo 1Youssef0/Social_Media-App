@@ -14,8 +14,6 @@ import { config } from "dotenv";
 config({ path: resolve("./config/.env.development") });
 
 //module routing
-import authController from "./modules/auth/auth.controller";
-import userController from "./modules/user/user.controller";
 import {
   BadRequestException,
   globalErrorHandling,
@@ -23,7 +21,8 @@ import {
 import connectDB from "./DB/db.connection";
 import { createGetPreSignedLink, deleteFile, getFile } from "./utils/multer/s3.config";
 import { promisify } from "node:util";
-import { pipeline } from "node:stream";
+import { pipeline } from "node:stream"
+import { authRouter,postRouter,userRouter } from "./modules";
 const createS3WriteStreamPipe = promisify(pipeline);
 
 //Handle base rate limit on all api requests
@@ -54,8 +53,9 @@ const bootstrap = async (): Promise<void> => {
   });
 
   //Sub-app-routing-modules
-  app.use("/auth", authController);
-  app.use("/user", userController);
+  app.use("/auth", authRouter);
+  app.use("/user", userRouter);
+  app.use("/post", postRouter);
 
   app.get(
     "/upload/*path",

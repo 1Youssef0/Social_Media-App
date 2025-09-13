@@ -18,7 +18,7 @@ export const cloudFileUpload = ({
   maxSizeMB = 2
 }: {
   validation?: string[];
-  storageApproach: storageEnum;
+  storageApproach?: storageEnum;
   maxSizeMB?:Number; 
 }): multer.Multer => {
   const storage =

@@ -1,4 +1,6 @@
 import mongoose, { Schema, Types, HydratedDocument } from "mongoose";
+import { generateHash } from "../../utils/security/hash.security";
+import { emailEvent } from "../../utils/events/email.events";
 
 export enum genderEnum {
   male = "male",
@@ -104,6 +106,51 @@ userSchema
   .get(function () {
     return this.firstName + " " + this.lastName;
   });
+
+userSchema.pre(
+  "save",
+  async function (
+    this: HUserDocument & { wasNew: boolean; confirmEmailPlainOtp?: string },
+    next
+  ) {
+    this.wasNew = this.isNew;
+    if (this.isModified("password")) {
+      this.password = await generateHash(this.password);
+    }
+    if (this.isModified("confirmEmailOtp")) {
+      this.confirmEmailPlainOtp = this.confirmEmailOtp as string;
+      this.confirmEmailOtp = await generateHash(this.confirmEmailOtp as string);
+    }
+    next();
+  }
+);
+
+userSchema.post("save", async function (doc, next) {
+  const that = this as HUserDocument & {
+    wasNew: boolean;
+    confirmEmailPlainOtp?: string;
+  };
+  if (that.wasNew && that.confirmEmailPlainOtp) {
+    emailEvent.emit("confirmEmail", {
+      to: this.email,
+      html: that.confirmEmailPlainOtp,
+    });
+  }
+  next();
+});
+
+userSchema.pre(["find", "findOne"], function (next) {
+  const query = this.getQuery();
+  if (query.paranoid === false) {
+    this.setQuery({ ...query });
+  } else {
+    this.setQuery({ ...query, freezedAt: { $exists: false } });
+  }
+  
+  next()
+});
+
 export const UserModel =
   mongoose.models.user || mongoose.model<IUser>("user", userSchema);
+
 export type HUserDocument = HydratedDocument<IUser>;

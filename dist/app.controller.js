@@ -10,13 +10,12 @@ const helmet_1 = __importDefault(require("helmet"));
 const express_rate_limit_1 = require("express-rate-limit");
 const dotenv_1 = require("dotenv");
 (0, dotenv_1.config)({ path: (0, node_path_1.resolve)("./config/.env.development") });
-const auth_controller_1 = __importDefault(require("./modules/auth/auth.controller"));
-const user_controller_1 = __importDefault(require("./modules/user/user.controller"));
 const error_response_1 = require("./utils/response/error.response");
 const db_connection_1 = __importDefault(require("./DB/db.connection"));
 const s3_config_1 = require("./utils/multer/s3.config");
 const node_util_1 = require("node:util");
 const node_stream_1 = require("node:stream");
+const modules_1 = require("./modules");
 const createS3WriteStreamPipe = (0, node_util_1.promisify)(node_stream_1.pipeline);
 const limiter = (0, express_rate_limit_1.rateLimit)({
     windowMs: 60 * 60000,
@@ -35,8 +34,9 @@ const bootstrap = async () => {
     app.get("/", (req, res) => {
         res.json({ message: "welcome to social app backend landing page 💖✔" });
     });
-    app.use("/auth", auth_controller_1.default);
-    app.use("/user", user_controller_1.default);
+    app.use("/auth", modules_1.authRouter);
+    app.use("/user", modules_1.userRouter);
+    app.use("/post", modules_1.postRouter);
     app.get("/upload/*path", async (req, res) => {
         const { downloadName, download = "false" } = req.query;
         const { path } = req.params;

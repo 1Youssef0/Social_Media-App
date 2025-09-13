@@ -35,6 +35,8 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserModel = exports.providerEnum = exports.roleEnum = exports.genderEnum = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
+const hash_security_1 = require("../../utils/security/hash.security");
+const email_events_1 = require("../../utils/events/email.events");
 var genderEnum;
 (function (genderEnum) {
     genderEnum["male"] = "male";
@@ -93,5 +95,36 @@ userSchema
 })
     .get(function () {
     return this.firstName + " " + this.lastName;
+});
+userSchema.pre("save", async function (next) {
+    this.wasNew = this.isNew;
+    if (this.isModified("password")) {
+        this.password = await (0, hash_security_1.generateHash)(this.password);
+    }
+    if (this.isModified("confirmEmailOtp")) {
+        this.confirmEmailPlainOtp = this.confirmEmailOtp;
+        this.confirmEmailOtp = await (0, hash_security_1.generateHash)(this.confirmEmailOtp);
+    }
+    next();
+});
+userSchema.post("save", async function (doc, next) {
+    const that = this;
+    if (that.wasNew && that.confirmEmailPlainOtp) {
+        email_events_1.emailEvent.emit("confirmEmail", {
+            to: this.email,
+            html: that.confirmEmailPlainOtp,
+        });
+    }
+    next();
+});
+userSchema.pre(["find", "findOne"], function (next) {
+    const query = this.getQuery();
+    if (query.paranoid === false) {
+        this.setQuery({ ...query });
+    }
+    else {
+        this.setQuery({ ...query, freezedAt: { $exists: false } });
+    }
+    next();
 });
 exports.UserModel = mongoose_1.default.models.user || mongoose_1.default.model("user", userSchema);

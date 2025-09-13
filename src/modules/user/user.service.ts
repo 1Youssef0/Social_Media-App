@@ -29,6 +29,9 @@ import {
   NotFoundException,
 } from "../../utils/response/error.response";
 import { s3Event } from "../../utils/multer/s3.events";
+import { success } from "zod";
+import { successResponse } from "../../utils/response/success.response";
+import { ICoverImageResponse, IProfileImageResponse } from "./user.entites";
 
 class UserService {
   private userModel = new UserRepository(UserModel);
@@ -89,13 +92,7 @@ class UserService {
       expiresIn: 30000,
     });
 
-    return res.json({
-      message: "done",
-      data: {
-        url,
-        Key,
-      },
-    });
+    return successResponse<IProfileImageResponse>({res , data: {url}})
   };
 
   profileCoverImage = async (req: Request, res: Response): Promise<Response> => {
@@ -120,12 +117,7 @@ class UserService {
       await deleteFiles({ urls: req.user.coverImages });
     }
 
-    return res.json({
-      message: "done",
-      data: {
-        urls,
-      },
-    });
+    return successResponse<ICoverImageResponse>({res,data:{user}})
   };
 
   logout = async (req: Request, res: Response): Promise<Response> => {
