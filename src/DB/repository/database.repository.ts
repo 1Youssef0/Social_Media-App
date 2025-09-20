@@ -23,8 +23,8 @@ export abstract class DatabaseRepository<TDocument> {
     options,
   }: {
     filter?: RootFilterQuery<TDocument>;
-    select?: ProjectionType<TDocument>;
-    options?: QueryOptions<TDocument> | null;
+    select?: ProjectionType<TDocument> | undefined;
+    options?: QueryOptions<TDocument> | undefined;
   }): Promise<HydratedDocument<TDocument>[] | [] | lean<TDocument>[]> {
     const doc = this.model.find(filter || {}).select(select || "");
     if (options?.populate) {
@@ -42,6 +42,39 @@ export abstract class DatabaseRepository<TDocument> {
     return await doc.exec();
   }
 
+  async paginate({
+    filter = {},
+    select,
+    options = {},
+    page = "all",
+    size = 5,
+  }: {
+    filter?: RootFilterQuery<TDocument>;
+    select?: ProjectionType<TDocument> | undefined;
+    options?: QueryOptions<TDocument> | undefined;
+    page?: number | "all";
+    size?: number;
+  }): Promise<HydratedDocument<TDocument>[] | [] | lean<TDocument>[] | any> {
+    let docsCount: number | undefined = undefined;
+    let pages: number | undefined = undefined;
+    if (page !== "all") {
+      page = Math.floor(page < 1 ? 1 : page);
+      options.limit = Math.floor(size < 1 || !size ? 5 : size);
+      options.skip = (page - 1) * options.limit;
+      docsCount = await this.model.countDocuments(filter);
+      pages = Math.ceil(docsCount / options.limit);
+    }
+    const result = await this.find({ filter, select, options });
+    return {
+      docsCount,
+      pages,
+      currentPage: page !== "all" ? page : undefined,
+      limit: options.limit,
+      result,
+    };
+  }
+
+  
   async findOne({
     filter,
     select,
@@ -108,8 +141,12 @@ export abstract class DatabaseRepository<TDocument> {
     update: UpdateQuery<TDocument>;
     options?: MongooseUpdateQueryOptions<TDocument> | null;
   }): Promise<UpdateWriteOpResult> {
+    if (Array.isArray(update)) {
+      return await this.model.updateOne(filter || {}, update, options);
+    }
+
     return await this.model.updateOne(
-      filter,
+      filter || {},
       { ...update, $inc: { __v: 1 } },
       options
     );
@@ -147,7 +184,6 @@ export abstract class DatabaseRepository<TDocument> {
     );
   }
 
-
   async findOneAndUpdate({
     filter,
     update,
@@ -158,7 +194,7 @@ export abstract class DatabaseRepository<TDocument> {
     options?: QueryOptions<TDocument> | null;
   }): Promise<HydratedDocument<TDocument> | lean<TDocument> | null> {
     return await this.model.findOneAndUpdate(
-     filter,
+      filter,
       { ...update, $inc: { __v: 1 } },
       options
     );

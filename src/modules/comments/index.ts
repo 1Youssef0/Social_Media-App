@@ -1,0 +1,1 @@
+export {default as commentRouter} from "./coments.controller" 

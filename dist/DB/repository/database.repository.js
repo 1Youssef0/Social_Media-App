@@ -22,6 +22,25 @@ class DatabaseRepository {
         }
         return await doc.exec();
     }
+    async paginate({ filter = {}, select, options = {}, page = "all", size = 5, }) {
+        let docsCount = undefined;
+        let pages = undefined;
+        if (page !== "all") {
+            page = Math.floor(page < 1 ? 1 : page);
+            options.limit = Math.floor(size < 1 || !size ? 5 : size);
+            options.skip = (page - 1) * options.limit;
+            docsCount = await this.model.countDocuments(filter);
+            pages = Math.ceil(docsCount / options.limit);
+        }
+        const result = await this.find({ filter, select, options });
+        return {
+            docsCount,
+            pages,
+            currentPage: page !== "all" ? page : undefined,
+            limit: options.limit,
+            result,
+        };
+    }
     async findOne({ filter, select, options, }) {
         const doc = this.model.findOne(filter).select(select || "");
         if (options?.populate) {
@@ -49,7 +68,10 @@ class DatabaseRepository {
         return (await this.model.insertMany(data));
     }
     async updateOne({ filter, update, options, }) {
-        return await this.model.updateOne(filter, { ...update, $inc: { __v: 1 } }, options);
+        if (Array.isArray(update)) {
+            return await this.model.updateOne(filter || {}, update, options);
+        }
+        return await this.model.updateOne(filter || {}, { ...update, $inc: { __v: 1 } }, options);
     }
     async deleteOne({ filter, }) {
         return await this.model.deleteOne(filter);

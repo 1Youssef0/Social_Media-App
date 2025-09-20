@@ -48,7 +48,17 @@ const postSchema = new mongoose_1.Schema({
     restoredBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
 }, {
     timestamps: true,
-    strictQuery: true
+    strictQuery: true,
+});
+postSchema.pre(["find", "findOne"], function (next) {
+    const query = this.getQuery();
+    if (query.paranoid === false) {
+        this.setQuery({ ...query });
+    }
+    else {
+        this.setQuery({ ...query, freezedAt: { $exists: false } });
+    }
+    next();
 });
 postSchema.pre(["findOneAndUpdate", "updateOne"], function (next) {
     const query = this.getQuery();

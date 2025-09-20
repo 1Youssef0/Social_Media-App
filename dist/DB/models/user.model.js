@@ -70,6 +70,7 @@ const userSchema = new mongoose_1.Schema({
     freezedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
     restoredAt: Date,
     restoredBy: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
+    friends: [{ type: mongoose_1.Schema.Types.ObjectId, ref: "User" }],
     phone: { type: String },
     profileImage: { type: String },
     temProfileImage: { type: String },

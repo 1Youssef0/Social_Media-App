@@ -1,33 +1,15 @@
 import { HydratedDocument, model, models, Schema, Types } from "mongoose";
+import { IPost } from "./post.model";
 
-export enum AllowCommentsEnum {
-  allow = "allow",
-  deny = "deny",
-}
 
-export enum AvailabilityEnum {
-  public = "public",
-  friends = "friends",
-  onlyMe = "only-me",
-}
 
-export enum LikeActionEnum {
-  like = "like",
-  unlike = "unlike",
-}
+export interface IComment {
 
-export interface IPost {
   content?: string;
   attachments?: string[];
-  assetsFolderId: string;
-
-  availability: AvailabilityEnum;
-  allowComments: AllowCommentsEnum;
 
   likes: Types.ObjectId[];
   tags: Types.ObjectId[];
-
-  createdBy: Types.ObjectId;
 
   freezedAt?: Date;
   freezedBy?: Types.ObjectId;
@@ -35,13 +17,18 @@ export interface IPost {
   restoredAt?: Date;
   restoredBy?: Types.ObjectId;
 
+  createdBy: Types.ObjectId;
   createdAt?: Date;
   updatedBy?: Types.ObjectId;
+
+  postId: Types.ObjectId | Partial<IPost>;
+  commentId: Types.ObjectId;
+  
 }
 
-export type HPostDocument = HydratedDocument<IPost>;
+export type HCommentDocument = HydratedDocument<IComment>;
 
-const postSchema = new Schema<IPost>(
+const commentSchema = new Schema<IComment>(
   {
     content: {
       type: String,
@@ -52,24 +39,14 @@ const postSchema = new Schema<IPost>(
       },
     },
     attachments: [String],
-    assetsFolderId: { type: String, required: true },
-
-    availability: {
-      type: String,
-      enum: AvailabilityEnum,
-      default: AvailabilityEnum.public,
-    },
-    allowComments: {
-      type: String,
-      enum: AllowCommentsEnum,
-      default: AllowCommentsEnum.allow,
-    },
 
     likes: [{ type: Schema.Types.ObjectId, ref: "User" }],
     tags: [{ type: Schema.Types.ObjectId, ref: "User" }],
 
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
-
+    postId: { type: Schema.Types.ObjectId, ref: "Post", required: true },
+    commentId: { type: Schema.Types.ObjectId, ref: "Comment" },
+    
     // except: [{ type: Schema.Types.ObjectId, ref: "User" }],
     // only: [{ type: Schema.Types.ObjectId, ref: "User" }],
 
@@ -82,12 +59,12 @@ const postSchema = new Schema<IPost>(
   {
     timestamps: true,
     strictQuery: true,
-    toObject: { virtuals: true },
-    toJSON: { virtuals: true },
+    toObject:{virtuals:true},
+    toJSON:{virtuals:true},
   }
 );
 
-postSchema.pre(["find", "findOne"], function (next) {
+commentSchema.pre(["find", "findOne"], function (next) {
   const query = this.getQuery();
   if (query.paranoid === false) {
     this.setQuery({ ...query });
@@ -98,7 +75,7 @@ postSchema.pre(["find", "findOne"], function (next) {
   next();
 });
 
-postSchema.pre(["findOneAndUpdate", "updateOne"], function (next) {
+commentSchema.pre(["findOneAndUpdate", "updateOne"], function (next) {
   const query = this.getQuery();
   if (query.paranoid === false) {
     this.setQuery({ ...query });
@@ -109,11 +86,12 @@ postSchema.pre(["findOneAndUpdate", "updateOne"], function (next) {
   next();
 });
 
-postSchema.virtual("comments", {
-  localField: "_id",
-  foreignField: "postId",
-  ref: "Comment",
+commentSchema.virtual("reply" , {
+  localField:"_id",
+  foreignField:"commentId",
+  ref:"Comment",
   justOne:true
-});
+})
 
-export const PostModel = models.post || model<IPost>("Post", postSchema);
+
+export const CommentModel = models.Comment || model<IComment>("Comment", commentSchema);

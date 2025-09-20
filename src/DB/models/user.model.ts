@@ -10,6 +10,7 @@ export enum genderEnum {
 export enum roleEnum {
   user = "user",
   admin = "admin",
+  superAdmin = "super-admin"
 }
 
 export enum providerEnum {
@@ -51,6 +52,8 @@ export interface IUser {
 
   restoredAt?: Date;
   restoredBy?: Types.ObjectId;
+  friends?: Types.ObjectId[];
+
 }
 
 const userSchema = new Schema<IUser>(
@@ -76,6 +79,7 @@ const userSchema = new Schema<IUser>(
 
     restoredAt: Date,
     restoredBy: { type: Schema.Types.ObjectId, ref: "User" },
+    friends: [{ type: Schema.Types.ObjectId, ref: "User" }],
 
     phone: { type: String },
     profileImage: { type: String },
@@ -149,6 +153,8 @@ userSchema.pre(["find", "findOne"], function (next) {
   
   next()
 });
+
+
 
 export const UserModel =
   mongoose.models.user || mongoose.model<IUser>("user", userSchema);

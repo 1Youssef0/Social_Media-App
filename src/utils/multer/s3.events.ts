@@ -1,7 +1,8 @@
 import { EventEmitter } from "node:events";
 import { deleteFile, getFile } from "./s3.config";
 import { UserRepository } from "../../DB/repository/user.repository";
-import { UserModel } from "../../DB/models/user.model";
+import { HUserDocument, UserModel } from "../../DB/models/user.model";
+import { UpdateQuery } from "mongoose";
 
 export const s3Event = new EventEmitter({});
 
@@ -21,16 +22,18 @@ s3Event.on("trackProfileImageUpload", (data) => {
         Key: data.oldKey,
       });
       console.log(`done❤`);
-
-
     } catch (error: any) {
       console.log(error);
       if (error.code === "NoSuchKey") {
+        let unSetData: UpdateQuery<HUserDocument> = { temProfileImage: 1 };
+        if (!data.oldKey) {
+          unSetData = { temProfileImage: 1, profileImage: 1 };
+        }
         await userModel.updateOne({
           filter: { _id: data.userId },
           update: {
             profileImage: data.oldKey,
-            $unset: { temProfileImage: 1 },
+            $unset: unSetData,
           },
         });
       }

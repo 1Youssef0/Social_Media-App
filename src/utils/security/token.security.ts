@@ -9,7 +9,6 @@ import { UserRepository } from "../../DB/repository/user.repository";
 import { v4 as uuid } from "uuid";
 import { TokenRepository } from "../../DB/repository/token.repository";
 import { HTokenDocument, TokenModel } from "../../DB/models/token.model";
-import { JwtPayload } from "./../../../node_modules/@types/jsonwebtoken/index.d";
 
 export enum SignatureLevelEnum {
   Bearer = "Bearer",
@@ -54,6 +53,7 @@ export const detectSignatureLevel = async (
 
   switch (role) {
     case roleEnum.admin:
+    case roleEnum.superAdmin:
       signatureLevel = SignatureLevelEnum.System;
       break;
     default:
