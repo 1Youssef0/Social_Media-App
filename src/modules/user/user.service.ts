@@ -12,8 +12,8 @@ import {
 } from "../../utils/security/token.security";
 import { Types, UpdateQuery } from "mongoose";
 import {
+  genderEnum,
   HUserDocument,
-  IUser,
   roleEnum,
   UserModel,
 } from "../../DB/models/user.model";
@@ -40,8 +40,20 @@ import { PostRepository } from "../../DB/repository/post.repository";
 import { PostModel } from "../../DB/models/post.model";
 import { FriendRequestRepository } from "../../DB/repository/friendRequest.repository";
 import { FriendRequestModel } from "../../DB/models/frinedRequest.mode";
+import { GraphQLError } from "graphql";
 
-class UserService {
+export interface IUser {
+  id: number;
+  name: string;
+  email: string;
+  password: string;
+  gender: genderEnum;
+  followers: number[];
+}
+
+let users: IUser[] = [];
+
+export class UserService {
   private userModel = new UserRepository(UserModel);
   private postModel = new PostRepository(PostModel);
   private friendRequestModel = new FriendRequestRepository(FriendRequestModel);
@@ -381,6 +393,43 @@ class UserService {
     });
 
     return res.json({ message: "done" });
+  };
+
+  //GRAPHQL
+
+  welcome = (user: HUserDocument): string => {
+    return "hello graphQL";
+  };
+
+  allUsers = async (
+    args: { gender: genderEnum },
+    authUser: HUserDocument
+  ): Promise<HUserDocument[]> => {
+    return await this.userModel.find({
+      filter: { _id: { $ne: authUser._id }, gender: args.gender },
+    });
+  };
+
+  search = (args: {
+    email: string;
+  }): { message: string; statusCode: number; data: IUser } => {
+    const user = users.find((ele) => ele.email === args.email);
+    if (!user) {
+      throw new GraphQLError("fail to find match result", {
+        extensions: { statusCode: 404 },
+      });
+    }
+    return { message: "Done", statusCode: 200, data: user };
+  };
+
+  addFollower = (args: { friendId: number; myId: number }): IUser[] => {
+    users = users.map((ele: IUser): IUser => {
+      if (ele.id === args.friendId) {
+        ele.followers.push(args.myId);
+      }
+      return ele;
+    });
+    return users;
   };
 }
 

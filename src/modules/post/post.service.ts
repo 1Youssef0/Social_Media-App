@@ -8,7 +8,7 @@ import {
   PostModel,
 } from "../../DB/models/post.model";
 import { UserRepository } from "../../DB/repository/user.repository";
-import { UserModel } from "../../DB/models/user.model";
+import { HUserDocument, UserModel } from "../../DB/models/user.model";
 import {
   BadRequestException,
   NotFoundException,
@@ -17,22 +17,23 @@ import { deleteFiles, uploadFiles } from "../../utils/multer/s3.config";
 import { v4 as uuid } from "uuid";
 import { LikePostQueryInputsDto } from "./post.dto";
 import { Types, UpdateQuery } from "mongoose";
-export const postAvailability = (req: Request) => {
+import { GraphQLError } from "graphql";
+export const postAvailability = (user: HUserDocument) => {
   return [
     { availability: AvailabilityEnum.public },
-    { availability: AvailabilityEnum.onlyMe, createdBy: req.user?._id },
+    { availability: AvailabilityEnum.onlyMe, createdBy: user._id },
     {
       availability: AvailabilityEnum.friends,
-      createdBy: { $in: [...(req.user?.friends || []), req.user?._id] },
+      createdBy: { $in: [...(user?.friends || []), user._id] },
     },
     {
       availability: { $ne: AvailabilityEnum.onlyMe },
-      tags: { $in: req.user?._id },
+      tags: { $in: user._id },
     },
   ];
 };
 
-class PostService {
+export class PostService {
   private userModel = new UserRepository(UserModel);
   private postModel = new PostRepository(PostModel);
   constructor() {}
@@ -226,7 +227,7 @@ class PostService {
     const post = await this.postModel.findOneAndUpdate({
       filter: {
         _id: postId,
-        $or: postAvailability(req),
+        $or: postAvailability(req.user as HUserDocument),
       },
       update,
     });
@@ -242,7 +243,7 @@ class PostService {
     let { page, size } = req.query as unknown as { page: number; size: number };
     const posts = await this.postModel.paginate({
       filter: {
-        $or: postAvailability(req),
+        $or: postAvailability(req.user as HUserDocument),
       },
       options: {
         populate: [
@@ -276,15 +277,80 @@ class PostService {
 
     return successResponse({ res, data: { posts } });
   };
+
+  // GQL
+
+  allPosts = async (
+    { page, size }: { page: number; size: number },
+    authUser: HUserDocument
+  ): Promise<{
+    docsCount?: number;
+    pages?: number;
+    currentPage?: number | undefined;
+    limit?: number;
+    result: HPostDocument[];
+  }> => {
+    const posts = await this.postModel.paginate({
+      filter: {
+        $or: postAvailability(authUser),
+      },
+      options: {
+        populate: [
+          {
+            path: "comments",
+            match: {
+              commentId: { $exists: false },
+              freezedAt: { $exists: false },
+            },
+            populate: [
+              {
+                path: "reply",
+                match: {
+                  commentId: { $exists: false },
+                  freezedAt: { $exists: false },
+                },
+              },
+            ],
+          },
+          {
+            path: "createdBy",
+          },
+        ],
+      },
+      page,
+      size,
+    });
+
+    return posts;
+  };
+
+  likeGraphPost = async (
+    { postId, action }: { postId: Request; action: LikeActionEnum },
+    authUser: HUserDocument
+  ): Promise<HPostDocument> => {
+    let update: UpdateQuery<HPostDocument> = {
+      $addToSet: { likes: authUser._id },
+    };
+    if (action === LikeActionEnum.unlike) {
+      update = { $pull: { likes: authUser._id } };
+    }
+
+    const post = await this.postModel.findOneAndUpdate({
+      filter: {
+        _id: postId,
+        $or: postAvailability(authUser),
+      },
+      update,
+    });
+
+    if (!post) {
+      throw new GraphQLError("InValid postId or post not exists", {
+        extensions: {statusCode:404},
+      });
+    }
+
+    return post
+  };
 }
 
 export const postService = new PostService();
- 
-
-
-
-
-
-
-
-

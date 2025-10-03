@@ -16,6 +16,9 @@ const s3_config_1 = require("./utils/multer/s3.config");
 const node_util_1 = require("node:util");
 const node_stream_1 = require("node:stream");
 const modules_1 = require("./modules");
+const express_2 = require("graphql-http/lib/use/express");
+const schema_gql_1 = require("./modules/graphQL/schema.gql");
+const authentication_middleware_1 = require("./middleware/authentication.middleware");
 const createS3WriteStreamPipe = (0, node_util_1.promisify)(node_stream_1.pipeline);
 const limiter = (0, express_rate_limit_1.rateLimit)({
     windowMs: 60 * 60000,
@@ -31,7 +34,11 @@ const bootstrap = async () => {
     app.use((0, helmet_1.default)());
     app.use(limiter);
     await (0, db_connection_1.default)();
-    app.get("/", (req, res) => {
+    app.all("/graphQL", (0, authentication_middleware_1.authentication)(), (0, express_2.createHandler)({
+        schema: schema_gql_1.schema,
+        context: (req) => ({ user: req.raw.user }),
+    }));
+    app.get("/welcome", (req, res) => {
         res.json({ message: "welcome to social app backend landing page 💖✔" });
     });
     app.use("/auth", modules_1.authRouter);
@@ -59,7 +66,7 @@ const bootstrap = async () => {
             Key,
             downloadName: downloadName,
             download,
-            expiresIn
+            expiresIn,
         });
         return res.json({ message: "done", data: { url } });
     });

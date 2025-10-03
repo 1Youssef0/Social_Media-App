@@ -32,17 +32,29 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
+exports.UserResolver = void 0;
 const authentication_middleware_1 = require("../../middleware/authentication.middleware");
-const cloud_multer_1 = require("../../utils/multer/cloud.multer");
-const comments_service_1 = __importDefault(require("./comments.service"));
-const validators = __importStar(require("./comments.validation"));
 const validation_middleware_1 = require("../../middleware/validation.middleware");
-const router = (0, express_1.Router)({ mergeParams: true });
-router.post("/", (0, authentication_middleware_1.authentication)(), (0, cloud_multer_1.cloudFileUpload)({ validation: cloud_multer_1.fileValidation.image }).array("attachments", 2), (0, validation_middleware_1.validation)(validators.createComment), comments_service_1.default.createComment);
-router.post("/:commentId/reply", (0, authentication_middleware_1.authentication)(), (0, cloud_multer_1.cloudFileUpload)({ validation: cloud_multer_1.fileValidation.image }).array("attachments", 2), (0, validation_middleware_1.validation)(validators.replyOnComment), comments_service_1.default.replyOnComment);
-exports.default = router;
+const user_authorization_1 = require("./user.authorization");
+const user_service_1 = require("./user.service");
+const validators = __importStar(require("./user.validation"));
+class UserResolver {
+    userService = new user_service_1.UserService();
+    constructor() { }
+    welcome = async (parent, args, context) => {
+        await (0, validation_middleware_1.graphValidation)(validators.welcome, args);
+        await (0, authentication_middleware_1.graphAuthorization)(user_authorization_1.endPoint.welcome, context.user.role);
+        return this.userService.welcome(context.user);
+    };
+    allUsers = async (parent, args, context) => {
+        return await this.userService.allUsers(args, context.user);
+    };
+    search = (parent, args) => {
+        return this.userService.search(args);
+    };
+    addFollower = (parent, args) => {
+        return this.userService.addFollower(args);
+    };
+}
+exports.UserResolver = UserResolver;

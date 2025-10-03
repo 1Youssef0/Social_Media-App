@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { successResponse } from "../../utils/response/success.response";
 import { UserRepository } from "../../DB/repository/user.repository";
-import { UserModel } from "../../DB/models/user.model";
+import { HUserDocument, UserModel } from "../../DB/models/user.model";
 import { AllowCommentsEnum, HPostDocument, PostModel } from "../../DB/models/post.model";
 import { CommentModel } from "../../DB/models/comment.model";
 import { CommentRepository } from "../../DB/repository/comment.repository";
@@ -27,7 +27,7 @@ class CommentService {
       filter: {
         _id: postId,
         allowComments: AllowCommentsEnum.allow,
-        $or: postAvailability(req),
+        $or: postAvailability(req.user as HUserDocument),
       },
     });
 
@@ -92,7 +92,7 @@ class CommentService {
             path: "postId",
             match: {
               allowComments: AllowCommentsEnum.allow,
-              $or: postAvailability(req),
+              $or: postAvailability(req.user as HUserDocument),
             },
           },
         ],

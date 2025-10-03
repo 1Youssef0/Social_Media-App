@@ -36,7 +36,7 @@ export interface IPost {
   restoredBy?: Types.ObjectId;
 
   createdAt?: Date;
-  updatedBy?: Types.ObjectId;
+  updatedAt?: Types.ObjectId;
 }
 
 export type HPostDocument = HydratedDocument<IPost>;

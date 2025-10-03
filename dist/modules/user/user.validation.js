@@ -1,32 +1,60 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.hardDeleteAccount = exports.restoreAccount = exports.freezeAccount = exports.logout = void 0;
+exports.hardDeleteAccount = exports.welcome = exports.restoreAccount = exports.freezeAccount = exports.acceptFriendRequest = exports.sendFriendRequest = exports.changeRole = exports.logout = void 0;
 const zod_1 = require("zod");
 const token_security_1 = require("../../utils/security/token.security");
 const mongoose_1 = require("mongoose");
+const validation_middleware_1 = require("../../middleware/validation.middleware");
+const user_model_1 = require("../../DB/models/user.model");
 exports.logout = {
     body: zod_1.z.strictObject({
-        flag: zod_1.z.enum(token_security_1.logoutEnum).default(token_security_1.logoutEnum.only)
-    })
+        flag: zod_1.z.enum(token_security_1.logoutEnum).default(token_security_1.logoutEnum.only),
+    }),
+};
+exports.changeRole = {
+    params: zod_1.z.strictObject({
+        userId: validation_middleware_1.generalFields.id,
+    }),
+    body: zod_1.z.strictObject({
+        role: zod_1.z.enum(user_model_1.roleEnum),
+    }),
+};
+exports.sendFriendRequest = {
+    params: zod_1.z.strictObject({
+        userId: validation_middleware_1.generalFields.id,
+    }),
+};
+exports.acceptFriendRequest = {
+    params: zod_1.z.strictObject({
+        requestId: validation_middleware_1.generalFields.id,
+    }),
 };
 exports.freezeAccount = {
-    params: zod_1.z.object({
-        userId: zod_1.z.string().optional()
-    }).optional().refine((data) => {
+    params: zod_1.z
+        .object({
+        userId: zod_1.z.string().optional(),
+    })
+        .optional()
+        .refine((data) => {
         return data?.userId ? mongoose_1.Types.ObjectId.isValid(data.userId) : true;
     }, {
         error: "In valid objectId format",
-        path: ["userId"]
-    })
+        path: ["userId"],
+    }),
 };
 exports.restoreAccount = {
-    params: zod_1.z.object({
-        userId: zod_1.z.string()
-    }).refine((data) => {
+    params: zod_1.z
+        .object({
+        userId: zod_1.z.string(),
+    })
+        .refine((data) => {
         return mongoose_1.Types.ObjectId.isValid(data.userId);
     }, {
         error: "In valid objectId format",
-        path: ["userId"]
-    })
+        path: ["userId"],
+    }),
 };
+exports.welcome = zod_1.z.strictObject({
+    name: zod_1.z.string().min(2),
+});
 exports.hardDeleteAccount = exports.restoreAccount;

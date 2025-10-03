@@ -46,6 +46,7 @@ var roleEnum;
 (function (roleEnum) {
     roleEnum["user"] = "user";
     roleEnum["admin"] = "admin";
+    roleEnum["superAdmin"] = "super-admin";
 })(roleEnum || (exports.roleEnum = roleEnum = {}));
 var providerEnum;
 (function (providerEnum) {

@@ -318,5 +318,6 @@ export const deleteFolderByPrefix = async ({
     return file.Key as string;
   });
 
-  return await deleteFiles({ urls, Bucket, Quiet });
+  return await deleteFiles({ urls, Bucket, Quiet }); 
 };
+

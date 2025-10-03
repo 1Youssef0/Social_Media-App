@@ -19,10 +19,17 @@ import {
   globalErrorHandling,
 } from "./utils/response/error.response";
 import connectDB from "./DB/db.connection";
-import { createGetPreSignedLink, deleteFile, getFile } from "./utils/multer/s3.config";
+import {
+  createGetPreSignedLink,
+  deleteFile,
+  getFile,
+} from "./utils/multer/s3.config";
 import { promisify } from "node:util";
-import { pipeline } from "node:stream"
-import { authRouter,postRouter,userRouter } from "./modules";
+import { pipeline } from "node:stream";
+import { authRouter, postRouter, userRouter } from "./modules";
+import { createHandler } from "graphql-http/lib/use/express";
+import { schema } from "./modules/graphQL/schema.gql";
+import { authentication } from "./middleware/authentication.middleware";
 const createS3WriteStreamPipe = promisify(pipeline);
 
 //Handle base rate limit on all api requests
@@ -48,7 +55,17 @@ const bootstrap = async (): Promise<void> => {
   await connectDB();
 
   // App_Routing
-  app.get("/", (req: Request, res: Response) => {
+
+  app.all(
+    "/graphQL",
+    authentication(),
+    createHandler({
+      schema: schema,
+      context: (req) => ({ user: req.raw.user }),
+    })
+  );
+
+  app.get("/welcome", (req: Request, res: Response) => {
     res.json({ message: "welcome to social app backend landing page 💖✔" });
   });
 
@@ -108,24 +125,24 @@ const bootstrap = async (): Promise<void> => {
         Key,
         downloadName: downloadName as string,
         download,
-        expiresIn
+        expiresIn,
       });
       return res.json({ message: "done", data: { url } });
     }
   );
 
-  app.get("/test-delete",async (req:Request , res:Response)=>{
-    const {Key} = req.query as {Key:string}
-    const result = await deleteFile({Key})
-    
+  app.get("/test-delete", async (req: Request, res: Response) => {
+    const { Key } = req.query as { Key: string };
+    const result = await deleteFile({ Key });
+
     // const result = await deleteFiles({
     //   urls:[
     //     "",
     //     ""
     //   ]
     // })
-    return res.json({message:"Done" , data:{ result }})
-  })
+    return res.json({ message: "Done", data: { result } });
+  });
 
   //In-Valid routing
   app.use("{/*dummy}", (req, res) => {
